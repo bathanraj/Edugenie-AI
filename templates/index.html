@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduGenie - Learning Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🧞 EduGenie</h1>
+    <p class="subtitle">Your Gemini-powered learning assistant</p>
+
+    <div class="card">
+      <label for="task">Choose a task</label>
+      <select id="task">
+        <option value="qa">Ask a Question (QnA)</option>
+        <option value="explain">Explain a Concept</option>
+        <option value="quiz">Generate Quiz</option>
+        <option value="summarize">Summarize Text</option>
+        <option value="recommend">Recommend Learning Path</option>
+      </select>
+
+      <label for="input">Your input</label>
+      <textarea id="input" rows="6" placeholder="Type a question, topic, or paste a passage..."></textarea>
+
+      <button id="submit">Submit</button>
+    </div>
+
+    <div id="result" class="card result hidden"></div>
+  </div>
+
+  <script>
+    const ENDPOINTS = {
+      qa: "/qa",
+      explain: "/explain",
+      quiz: "/quiz",
+      summarize: "/summarize",
+      recommend: "/learn/recommendations",
+    };
+
+    const taskEl = document.getElementById("task");
+    const inputEl = document.getElementById("input");
+    const btn = document.getElementById("submit");
+    const resultEl = document.getElementById("result");
+
+    function showResult() { resultEl.classList.remove("hidden"); }
+
+    function renderText(text) {
+      resultEl.innerHTML = "";
+      const pre = document.createElement("div");
+      pre.className = "text-result";
+      pre.textContent = text;   // textContent avoids HTML injection
+      resultEl.appendChild(pre);
+    }
+
+    function renderError(msg) {
+      resultEl.innerHTML = "";
+      const div = document.createElement("div");
+      div.className = "error";
+      div.textContent = "⚠️ " + msg;
+      resultEl.appendChild(div);
+    }
+
+    function renderQuiz(questions) {
+      resultEl.innerHTML = "";
+      questions.forEach((q, i) => {
+        const box = document.createElement("div");
+        box.className = "quiz-q";
+
+        const title = document.createElement("p");
+        title.className = "quiz-title";
+        title.textContent = (i + 1) + ". " + q.question;
+        box.appendChild(title);
+
+        const feedback = document.createElement("p");
+        feedback.className = "feedback";
+
+        q.options.forEach((opt) => {
+          const b = document.createElement("button");
+          b.className = "option";
+          b.textContent = opt;
+          b.addEventListener("click", () => {
+            box.querySelectorAll(".option").forEach((o) => {
+              o.disabled = true;
+              if (o.textContent === q.answer) o.classList.add("correct");
+            });
+            if (opt === q.answer) {
+              feedback.textContent = "✅ Correct!";
+            } else {
+              b.classList.add("wrong");
+              feedback.textContent = "❌ Not quite. Correct answer: " + q.answer;
+            }
+          });
+          box.appendChild(b);
+        });
+
+        box.appendChild(feedback);
+        resultEl.appendChild(box);
+      });
+    }
+
+    btn.addEventListener("click", async () => {
+      const text = inputEl.value.trim();
+      showResult();
+      if (!text) { renderError("Please enter some text first."); return; }
+
+      btn.disabled = true;
+      btn.textContent = "Thinking...";
+      resultEl.innerHTML = '<div class="loading">Working on it...</div>';
+
+      try {
+        const res = await fetch(ENDPOINTS[taskEl.value], {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Something went wrong.");
+
+        if (taskEl.value === "quiz") renderQuiz(data.result);
+        else renderText(data.result);
+      } catch (err) {
+        renderError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Submit";
+      }
+    });
+  </script>
+</body>
+</html>
